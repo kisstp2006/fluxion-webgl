@@ -1,0 +1,167 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: BSL-1.0 -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fluxion WebGL</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #e8e8ea;
+        --dim: #8a8a95;
+        --ground: #0f1013;
+        --panel: #191a1f;
+        --line: #2a2b33;
+        --bad: #ff8a8a;
+      }
+      * { box-sizing: border-box; }
+      /* `height`, not `min-height`, and `overflow: hidden`. A canvas has an
+         intrinsic size - its width and height attributes - and the glue sets
+         those from the element's measured size every frame. Let the page grow
+         to fit its content and the two chase each other: a slightly taller
+         canvas measures taller, which sets a taller buffer, which is a taller
+         intrinsic size, and the canvas grows without bound. */
+      body {
+        margin: 0;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: var(--ground);
+        color: var(--ink);
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      h1 { font-size: 15px; font-weight: 600; margin: 0; }
+      h1 span { color: var(--dim); font-weight: 400; }
+      nav { display: flex; gap: 6px; margin-left: auto; }
+      button {
+        font: inherit;
+        color: var(--ink);
+        background: #23242b;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 5px 12px;
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] { background: #34526e; border-color: #4a7ba8; }
+      button:hover { border-color: #4a4b57; }
+      /* The canvas is taken out of flow so that it fills what is left over
+         rather than deciding what is left over. */
+      main { flex: 1; min-height: 0; position: relative; }
+      canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+      footer {
+        padding: 8px 16px;
+        border-top: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--dim);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      footer.bad { color: var(--bad); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Fluxion WebGL <span>&mdash; Zig, compiled to WebAssembly</span></h1>
+      <nav>
+        <button id="cube" aria-pressed="true">cube</button>
+        <button id="triangle" aria-pressed="false">triangle</button>
+      </nav>
+    </header>
+
+    <main><canvas id="canvas"></canvas></main>
+
+    <footer id="status">loading&hellip;</footer>
+
+    <script type="module">
+      import { Fluxion } from "./fluxion-webgl.js";
+
+      const canvas = document.getElementById("canvas");
+      const status = document.getElementById("status");
+      const buttons = [...document.querySelectorAll("nav button")];
+
+      let stop = null;
+      let current = null;
+
+      function say(text, bad = false) {
+        status.textContent = text;
+        status.classList.toggle("bad", bad);
+      }
+
+      async function load(name) {
+        // Tear the previous one down before building the next: the module
+        // owns WebGL objects, and a page that switches examples without
+        // calling `deinit` leaks them for as long as the tab is open.
+        if (stop) stop();
+        if (current?.deinit) current.deinit();
+        stop = null;
+        current = null;
+
+        buttons.forEach((b) => b.setAttribute("aria-pressed", b.id === name));
+
+        try {
+          const fluxion = new Fluxion(canvas);
+          // Size the drawing buffer before `init` runs, so the first frame
+          // has a viewport that matches the canvas rather than the 300x150
+          // a canvas defaults to.
+          fluxion.resize();
+
+          const exports = await fluxion.instantiate(`./${name}.wasm`);
+          current = exports;
+
+          if (!exports.init()) {
+            say(`${name}: init() failed - see the console`, true);
+            return;
+          }
+
+          // The drawing buffer is not its final size until the first frame
+          // has been laid out, so report it when it changes rather than once
+          // at the start - which is how the line used to read "1x1".
+          let width = 0;
+          let height = 0;
+          stop = fluxion.run(() => {
+            exports.frame();
+            if (canvas.width === width && canvas.height === height) return;
+            width = canvas.width;
+            height = canvas.height;
+            say(
+              `${name}.wasm  ${fluxion.isWebGL2 ? "WebGL 2" : "WebGL 1"}  ` +
+                `${width}x${height} device px`,
+            );
+          });
+        } catch (error) {
+          say(String(error), true);
+          throw error;
+        }
+      }
+
+      buttons.forEach((button) =>
+        button.addEventListener("click", () => load(button.id)),
+      );
+
+      // A lost context invalidates every object the module made. Rebuilding
+      // from scratch is the honest response and the one this page takes.
+      canvas.addEventListener("webglcontextlost", (event) => {
+        event.preventDefault();
+        say("context lost - reloading", true);
+        if (stop) stop();
+      });
+      canvas.addEventListener("webglcontextrestored", () => {
+        load(buttons.find((b) => b.getAttribute("aria-pressed") === "true").id);
+      });
+
+      load("cube");
+    </script>
+  </body>
+</html>

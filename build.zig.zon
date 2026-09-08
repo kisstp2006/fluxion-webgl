@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: BSL-1.0
+
+.{
+    .name = .fluxion_webgl,
+    .version = "0.1.0",
+    .minimum_zig_version = "0.16.0",
+    .fingerprint = 0x5b6aa59475db2bf3,
+    .dependencies = .{
+        // The library itself has none, and that is worth a sentence rather
+        // than a shrug. `fluxion-gl` needs `fluxion-dyn` because a desktop
+        // driver has to be opened and its entry points found at run time.
+        // There is nothing to open here: the calls are WebAssembly imports,
+        // resolved by the browser before the module runs. A loader is exactly
+        // the thing this target does not have and does not need.
+
+        // What the example draws with. Lazy: fetched only when the examples
+        // are built, which is when this is the root package or `-Dexamples`
+        // is given. A program that depends on `fluxion_webgl` never downloads
+        // it, and the module itself imports it nowhere - a binding has no
+        // business having an opinion about your vectors.
+        .fluxion_math = .{
+            .url = "git+https://github.com/kisstp2006/fluxion-math#92afdbddbf930369265d24136402c7eb5dd8f70e",
+            .hash = "fluxion_math-0.1.0-dfpZBeNUBAAwUMriLKaOTRBWGFmfY53_jyYuMUxkPYek",
+            .lazy = true,
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "examples",
+        "README.md",
+        "LICENSE",
+    },
+}
