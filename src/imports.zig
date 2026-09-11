@@ -23,8 +23,9 @@
 //! So the version policy inverts. `fluxion-gl` spells an optional command as
 //! `?*const fn`, because a driver either has it or does not. Here every
 //! import is required and the *glue* decides what to provide: a WebGL 1
-//! context has no `createVertexArray`, so `webgl.js` supplies one backed by
-//! the `OES_vertex_array_object` extension, or by a function that throws.
+//! context has no `createVertexArray`, so `fluxion-webgl.js` supplies one
+//! backed by the `OES_vertex_array_object` extension, or by a function that
+//! throws.
 //! The check moved from the type system to the loader, because that is where
 //! the browser put it.
 //!

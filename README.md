@@ -91,6 +91,19 @@ const fluxion = b.dependency("fluxion_webgl", .{
 exe_mod.addImport("fluxion_webgl", fluxion.module("fluxion_webgl"));
 ```
 
+And install the glue wherever the page loads the module from. It is the other
+half of the imports - a page cannot instantiate the module without it - and
+the build hands it over by name, so nothing depends on where it lives in this
+repository:
+
+```zig
+b.getInstallStep().dependOn(&b.addInstallFileWithDir(
+    fluxion.namedLazyPath("glue"),
+    .{ .custom = "web" },
+    "fluxion-webgl.js",
+).step);
+```
+
 **Nothing comes with it.** The library has no dependencies at all, which is
 worth a sentence rather than a shrug: `fluxion-gl` needs
 [Fluxion Dyn](https://github.com/kisstp2006/fluxion-dyn) because a desktop
@@ -351,10 +364,12 @@ part of the suite too.
 
 ## The JavaScript
 
-`examples/web/fluxion-webgl.js` is the whole of it: five hundred lines, a
-good part of them comments, with no dependencies and no build step. It
-implements every import the library declares, and it is the only JavaScript a
-program using this library needs.
+`src/fluxion-webgl.js` is the whole of it: five hundred lines, a good part of
+them comments, with no dependencies and no build step. It implements every
+import the library declares, and it is the only JavaScript a program using
+this library needs. It lives with the library rather than the examples, and a
+package that depends on this one gets it as `namedLazyPath("glue")` - see
+[Install](#install).
 
 ```js
 import { Fluxion } from "./fluxion-webgl.js";

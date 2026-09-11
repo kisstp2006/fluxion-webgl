@@ -4,7 +4,9 @@
 // `src/host_imports.zig` declare, implemented against a real WebGL context.
 //
 // This is the whole of the JavaScript. It is deliberately one file with no
-// dependencies and no build step - open the page and it runs.
+// dependencies and no build step - open the page and it runs. A package that
+// depends on fluxion-webgl gets it from the build as the named path `glue`,
+// to install next to its own module.
 //
 // Three things it has to do, and they are the three things every wasm binding
 // has to do:

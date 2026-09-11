@@ -17,6 +17,17 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // The other half of the imports: `src/fluxion-webgl.js` implements every
+    // one of them against a real WebGL context, and a page cannot instantiate
+    // the module without it. It is the library's, not the examples', so a
+    // package that depends on this one takes it by name rather than by a path
+    // into somebody else's directories:
+    //   dep.namedLazyPath("glue")
+    //
+    // Named here, before the early return below that every dependency takes.
+    const glue = b.path("src/fluxion-webgl.js");
+    b.addNamedLazyPath("glue", glue);
+
     // zig build test
     const tests = b.addTest(.{
         .name = "fluxion-webgl-tests",
@@ -165,6 +176,7 @@ pub fn build(b: *std.Build) void {
         const install_wasm = b.addInstallArtifact(exe, .{
             .dest_dir = .{ .override = .{ .custom = "web" } },
         });
+        const install_glue = b.addInstallFileWithDir(glue, .{ .custom = "web" }, "fluxion-webgl.js");
         const install_page = b.addInstallDirectory(.{
             .source_dir = b.path("examples/web"),
             .install_dir = .prefix,
@@ -173,6 +185,7 @@ pub fn build(b: *std.Build) void {
 
         const step = b.step(example.step, example.about);
         step.dependOn(&install_wasm.step);
+        step.dependOn(&install_glue.step);
         step.dependOn(&install_page.step);
 
         all_examples.dependOn(step);

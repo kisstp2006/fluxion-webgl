@@ -33,9 +33,10 @@
 //! **There is no context creation here, and there will not be.** The canvas
 //! and its `WebGLRenderingContext` are the page's, made in JavaScript before
 //! the module was instantiated, and handed over as the imports this library
-//! declares. `examples/web/fluxion-webgl.js` is a complete implementation of
-//! them, in four hundred lines with no dependencies, and it is the only
-//! JavaScript needed.
+//! declares. `src/fluxion-webgl.js` is a complete implementation of them, in
+//! five hundred lines with no dependencies, and it is the only JavaScript
+//! needed - a package that depends on this one gets it from the build as
+//! `namedLazyPath("glue")`.
 //! This library starts where that file ends - which is the same relationship
 //! [Fluxion GL](https://github.com/kisstp2006/fluxion-gl) has with GLFW.
 //!
