@@ -83,6 +83,7 @@ pub const Buffer = types.Buffer;
 pub const Framebuffer = types.Framebuffer;
 pub const Program = types.Program;
 pub const Renderbuffer = types.Renderbuffer;
+pub const Sampler = types.Sampler;
 pub const Shader = types.Shader;
 pub const Texture = types.Texture;
 pub const UniformLocation = types.UniformLocation;
@@ -96,6 +97,15 @@ pub const now = host.now;
 
 /// The size of the drawing buffer, in device pixels. See `host.canvasSize`.
 pub const canvasSize = host.canvasSize;
+
+// Check the imports against the stub on every wasm build of this library,
+// and so on the one `zig build test` makes for exactly that purpose. It has
+// to be a top-level `comptime` block: a `test` block is analysed only when
+// tests are being built, and the wasm build never is one - so a call from
+// there looked like a check and ran nowhere. See `api.verify`.
+comptime {
+    api.verify();
+}
 
 test {
     // Pull each module in so `zig build test` runs its tests too.

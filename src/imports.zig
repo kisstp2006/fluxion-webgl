@@ -72,16 +72,20 @@ pub extern "webgl" fn viewport(x: Int, y: Int, width: Sizei, height: Sizei) void
 pub extern "webgl" fn scissor(x: Int, y: Int, width: Sizei, height: Sizei) void;
 pub extern "webgl" fn clearColor(r: Float, g: Float, b: Float, a: Float) void;
 pub extern "webgl" fn clearDepth(depth: Float) void;
+pub extern "webgl" fn clearStencil(s: Int) void;
 pub extern "webgl" fn clear(mask: u32) void;
 pub extern "webgl" fn enable(cap: Enum) void;
 pub extern "webgl" fn disable(cap: Enum) void;
 pub extern "webgl" fn depthFunc(func: Enum) void;
 pub extern "webgl" fn depthMask(flag: Boolean) void;
+pub extern "webgl" fn depthRange(near: Float, far: Float) void;
 pub extern "webgl" fn colorMask(r: Boolean, g: Boolean, b: Boolean, a: Boolean) void;
 pub extern "webgl" fn cullFace(mode: Enum) void;
 pub extern "webgl" fn frontFace(mode: Enum) void;
 pub extern "webgl" fn blendFunc(src: Enum, dst: Enum) void;
 pub extern "webgl" fn blendEquation(mode: Enum) void;
+pub extern "webgl" fn blendFuncSeparate(src_rgb: Enum, dst_rgb: Enum, src_alpha: Enum, dst_alpha: Enum) void;
+pub extern "webgl" fn blendEquationSeparate(mode_rgb: Enum, mode_alpha: Enum) void;
 pub extern "webgl" fn pixelStorei(pname: Enum, param: Int) void;
 pub extern "webgl" fn finish() void;
 pub extern "webgl" fn flush() void;
@@ -111,6 +115,18 @@ pub extern "webgl" fn bindBuffer(target: Enum, buffer: Uint) void;
 pub extern "webgl" fn bufferData(target: Enum, ptr: [*]const u8, len: u32, usage: Enum) void;
 pub extern "webgl" fn bufferSubData(target: Enum, offset: Int, ptr: [*]const u8, len: u32) void;
 
+/// `size` bytes of storage for the buffer bound to `target`, zeroed.
+///
+/// WebGL's `bufferData(target, size, usage)`: the overload that takes a size
+/// where the other takes data. JavaScript tells the two apart by the type of
+/// the second argument, and the wire has no types to tell them apart by, so
+/// here they are two names.
+pub extern "webgl" fn bufferDataSize(target: Enum, size: u32, usage: Enum) void;
+
+/// WebGL 2. Bind `buffer` to slot `index` of an indexed target - for
+/// `uniform_buffer`, the slot a block was pointed at by `uniformBlockBinding`.
+pub extern "webgl" fn bindBufferBase(target: Enum, index: Uint, buffer: Uint) void;
+
 // -------------------------------------------------------------------------
 // Vertex arrays and attributes
 // -------------------------------------------------------------------------
@@ -128,6 +144,11 @@ pub extern "webgl" fn vertexAttribPointer(
     stride: Sizei,
     offset: Int,
 ) void;
+
+/// WebGL 2. As `vertexAttribPointer`, for an attribute the shader declares as
+/// `int` or `uint`: the values arrive as integers, where the other call would
+/// have turned them into floats on the way in.
+pub extern "webgl" fn vertexAttribIPointer(index: Uint, size: Int, kind: Enum, stride: Sizei, offset: Int) void;
 pub extern "webgl" fn vertexAttribDivisor(index: Uint, divisor: Uint) void;
 
 // -------------------------------------------------------------------------
@@ -156,6 +177,16 @@ pub extern "webgl" fn getAttribLocation(program: Uint, ptr: [*]const u8, len: u3
 /// Unlike every other object here this one is looked up rather than created,
 /// and `.none` is an ordinary answer rather than a failure.
 pub extern "webgl" fn getUniformLocation(program: Uint, ptr: [*]const u8, len: u32) Uint;
+
+/// WebGL 2. Which uniform block of `program` is called `ptr[0..len]`, or
+/// `invalid_index` where there is none by that name - never declared, or
+/// removed by the linker because nothing reads it.
+pub extern "webgl" fn getUniformBlockIndex(program: Uint, ptr: [*]const u8, len: u32) Uint;
+
+/// WebGL 2. Point block `block` of `program` at uniform buffer slot
+/// `binding`. GLSL ES 3.00 has no `layout(binding = n)`, so this is where a
+/// block learns its slot.
+pub extern "webgl" fn uniformBlockBinding(program: Uint, block: Uint, binding: Uint) void;
 
 // -------------------------------------------------------------------------
 // Uniforms
@@ -216,6 +247,20 @@ pub extern "webgl" fn texSubImage2D(
     ptr: [*]const u8,
     len: u32,
 ) void;
+
+// -------------------------------------------------------------------------
+// Samplers
+// -------------------------------------------------------------------------
+
+/// WebGL 2. A sampler object: filtering and wrapping, kept apart from any
+/// one texture.
+pub extern "webgl" fn createSampler() Uint;
+pub extern "webgl" fn deleteSampler(sampler: Uint) void;
+/// WebGL 2. Read texture unit `unit` through `sampler`. The unit is the
+/// index, not `texture0 + unit` - the same number a sampler uniform is set
+/// to.
+pub extern "webgl" fn bindSampler(unit: Uint, sampler: Uint) void;
+pub extern "webgl" fn samplerParameteri(sampler: Uint, pname: Enum, param: Int) void;
 
 // -------------------------------------------------------------------------
 // Framebuffers

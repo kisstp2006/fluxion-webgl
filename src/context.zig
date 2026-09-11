@@ -40,6 +40,7 @@ const Framebuffer = types.Framebuffer;
 const Int = types.Int;
 const Program = types.Program;
 const Renderbuffer = types.Renderbuffer;
+const Sampler = types.Sampler;
 const Shader = types.Shader;
 const Sizei = types.Sizei;
 const Texture = types.Texture;
@@ -182,7 +183,7 @@ pub const Context = struct {
     /// is how a program asks before it depends on it.
     pub inline fn has(self: Context, feature: Feature) bool {
         return switch (feature) {
-            .vertex_arrays, .instancing, .sized_formats, .uniform_blocks => self.version.atLeast(.webgl2),
+            .vertex_arrays, .instancing, .sized_formats, .uniform_blocks, .samplers => self.version.atLeast(.webgl2),
         };
     }
 
@@ -193,8 +194,11 @@ pub const Context = struct {
         instancing,
         /// `rgba8` and the rest, rather than `rgba` inferring its own size.
         sized_formats,
-        /// `uniform_buffer`.
+        /// `uniform_buffer`, `uniformBlockIndex`, `bindBufferBase`.
         uniform_blocks,
+        /// `createSampler` and friends. WebGL 1 has no extension for them:
+        /// filtering is a property of the texture there, and that is all.
+        samplers,
     };
 
     // ---------------------------------------------------------------------
@@ -217,6 +221,10 @@ pub const Context = struct {
         raw.clearDepth(depth);
     }
 
+    pub inline fn clearStencil(_: Context, s: i32) void {
+        raw.clearStencil(s);
+    }
+
     pub inline fn clear(_: Context, mask: u32) void {
         raw.clear(mask);
     }
@@ -237,6 +245,12 @@ pub const Context = struct {
         raw.depthMask(writable);
     }
 
+    /// Which part of the depth buffer clip space's -1 to 1 lands in. Zero to
+    /// one, the default, is the whole of it.
+    pub inline fn depthRange(_: Context, near: f32, far: f32) void {
+        raw.depthRange(near, far);
+    }
+
     pub inline fn colorMask(_: Context, r: bool, g: bool, b: bool, a: bool) void {
         raw.colorMask(r, g, b, a);
     }
@@ -255,6 +269,20 @@ pub const Context = struct {
 
     pub inline fn blendEquation(_: Context, mode: Enum) void {
         raw.blendEquation(mode);
+    }
+
+    /// `blendFunc`, with colour and alpha given factors of their own.
+    ///
+    /// What straight alpha actually wants: colour weighted by the source's
+    /// alpha, and the alpha channel itself accumulated with `one`, so that
+    /// drawing onto an opaque target leaves it opaque. `blendFunc` would
+    /// weight the alpha by itself too and leave holes a compositor can see.
+    pub inline fn blendFuncSeparate(_: Context, src_rgb: Enum, dst_rgb: Enum, src_alpha: Enum, dst_alpha: Enum) void {
+        raw.blendFuncSeparate(src_rgb, dst_rgb, src_alpha, dst_alpha);
+    }
+
+    pub inline fn blendEquationSeparate(_: Context, mode_rgb: Enum, mode_alpha: Enum) void {
+        raw.blendEquationSeparate(mode_rgb, mode_alpha);
     }
 
     pub inline fn pixelStorei(_: Context, pname: Enum, param: i32) void {
@@ -331,6 +359,24 @@ pub const Context = struct {
         raw.bufferSubData(target, @intCast(offset), bytes.ptr, @intCast(bytes.len));
     }
 
+    /// Give the buffer bound to `target` room for `size` bytes, zeroed, and
+    /// nothing in them yet.
+    ///
+    /// What a buffer written every frame is made with, and a uniform buffer:
+    /// the storage now, the contents from `bufferSubData` later. WebGL
+    /// spells it as `bufferData` with a number where the data would go; the
+    /// wire cannot tell the two apart, so here it has a name of its own.
+    pub inline fn bufferDataSize(_: Context, target: Enum, size: usize, usage: Enum) void {
+        raw.bufferDataSize(target, @intCast(size), usage);
+    }
+
+    /// Bind `buffer` to slot `index` of an indexed target. For
+    /// `uniform_buffer` that is the slot a block reads from - see
+    /// `uniformBlockBinding` for how a block is pointed at one. WebGL 2.
+    pub inline fn bindBufferBase(_: Context, target: Enum, index: u32, buffer: Buffer) void {
+        raw.bindBufferBase(target, index, buffer.index());
+    }
+
     // ---------------------------------------------------------------------
     // Vertex arrays and attributes
     // ---------------------------------------------------------------------
@@ -381,6 +427,14 @@ pub const Context = struct {
         offset: i32,
     ) void {
         raw.vertexAttribPointer(index, size, kind, normalized, stride, offset);
+    }
+
+    /// `vertexAttribPointer` for an attribute the shader declares as `int`,
+    /// `uint` or one of their vectors. The numbers arrive as integers; the
+    /// other call would have made floats of them on the way in, and a shader
+    /// reading an `ivec4` from one of those reads nonsense. WebGL 2.
+    pub inline fn vertexAttribIPointer(_: Context, index: u32, size: i32, kind: Enum, stride: i32, offset: i32) void {
+        raw.vertexAttribIPointer(index, size, kind, stride, offset);
     }
 
     /// How many instances share one value of attribute `index`. Zero - the
@@ -538,6 +592,30 @@ pub const Context = struct {
         return @enumFromInt(raw.getUniformLocation(program.index(), name.ptr, @intCast(name.len)));
     }
 
+    /// Which of the program's uniform blocks is called `name`, or null where
+    /// there is none - never declared, or removed by the linker because
+    /// nothing reads it. WebGL 2.
+    ///
+    /// Null rather than `invalid_index`, because that number is a real `u32`
+    /// and would go on to `uniformBlockBinding` without complaint. Unlike a
+    /// missing uniform location, a missing block is usually worth stopping
+    /// for: a block is where a whole frame's numbers are, and a program that
+    /// binds a buffer to nothing draws with zeros.
+    pub fn uniformBlockIndex(_: Context, program: Program, name: []const u8) ?u32 {
+        const index = raw.getUniformBlockIndex(program.index(), name.ptr, @intCast(name.len));
+        return if (index == enums.invalid_index) null else index;
+    }
+
+    /// Point uniform block `block` of `program` at uniform buffer slot
+    /// `binding` - the slot `bindBufferBase` fills.
+    ///
+    /// GLSL ES 3.00 has no `layout(binding = n)`, so this call is the only
+    /// place a block learns its slot, and it is remembered by the program:
+    /// once after linking is enough. WebGL 2.
+    pub inline fn uniformBlockBinding(_: Context, program: Program, block: u32, binding: u32) void {
+        raw.uniformBlockBinding(program.index(), block, binding);
+    }
+
     // ---------------------------------------------------------------------
     // Uniforms
     // ---------------------------------------------------------------------
@@ -680,6 +758,38 @@ pub const Context = struct {
     }
 
     // ---------------------------------------------------------------------
+    // Samplers
+    // ---------------------------------------------------------------------
+
+    /// A sampler object: filtering and wrapping, held apart from the texture.
+    ///
+    /// Bound to a texture unit, it overrides whatever the texture's own
+    /// `texParameteri` said - so one picture can be read smoothly in one draw
+    /// and in hard pixels in the next without being touched in between.
+    /// WebGL 2; ask `has(.samplers)` first if the page might get WebGL 1.
+    pub fn createSampler(_: Context) Error!Sampler {
+        const name = raw.createSampler();
+        if (name == 0) return error.OutOfObjects;
+        return @enumFromInt(name);
+    }
+
+    pub inline fn deleteSampler(_: Context, sampler: Sampler) void {
+        raw.deleteSampler(sampler.index());
+    }
+
+    /// Read texture unit `unit` through `sampler`, or through the texture's
+    /// own parameters again with `.none`. The unit is the index - `1`, not
+    /// `textureUnit(1)` - which is the opposite of `activeTexture` and the
+    /// same as the number a sampler uniform is set to.
+    pub inline fn bindSampler(_: Context, unit: u32, sampler: Sampler) void {
+        raw.bindSampler(unit, sampler.index());
+    }
+
+    pub inline fn samplerParameteri(_: Context, sampler: Sampler, pname: Enum, param: i32) void {
+        raw.samplerParameteri(sampler.index(), pname, param);
+    }
+
+    // ---------------------------------------------------------------------
     // Framebuffers
     // ---------------------------------------------------------------------
 
@@ -742,7 +852,7 @@ pub const Context = struct {
         rb_target: Enum,
         rbo: Renderbuffer,
     ) void {
-        raw.framebufferRenderbuffer(target, attachment, rb_target, rbo);
+        raw.framebufferRenderbuffer(target, attachment, rb_target, rbo.index());
     }
 
     /// Read a rectangle of the bound framebuffer into `pixels`.
@@ -979,6 +1089,117 @@ test "a draw records what it was asked for" {
     gl.drawArraysInstanced(c.triangle_strip, 0, 4, 128);
     try testing.expectEqual(128, api.stub.state.last_draw.instances);
     try testing.expectEqual(2, api.stub.state.draw_calls);
+}
+
+test "a uniform block is found by name, and one the linker removed is null" {
+    api.stub.reset();
+    defer api.stub.reset();
+
+    const gl: Context = .init();
+    var text: [64]u8 = undefined;
+    var log: std.Io.Writer = .fixed(&text);
+    const program = try gl.buildProgram("#version 300 es\n", "#version 300 es\n", &log);
+    defer gl.deleteProgram(program);
+
+    const frame = gl.uniformBlockIndex(program, "Frame").?;
+    gl.uniformBlockBinding(program, frame, 2);
+    try testing.expectEqual(frame, api.stub.state.last_block_binding.block);
+    try testing.expectEqual(2, api.stub.state.last_block_binding.binding);
+
+    // Null, and not `invalid_index` - which is a real number and would have
+    // gone on to `uniformBlockBinding` without a word.
+    try testing.expectEqual(null, gl.uniformBlockIndex(program, "_gone"));
+
+    // And the slot the block was pointed at is the slot a buffer goes in.
+    const ubo = try gl.createBuffer();
+    defer gl.deleteBuffer(ubo);
+    gl.bindBufferBase(c.uniform_buffer, 2, ubo);
+    try testing.expectEqual(ubo.index(), api.stub.state.uniform_buffers[2]);
+}
+
+test "a buffer can be given its size before anything is in it" {
+    api.stub.reset();
+    defer api.stub.reset();
+
+    const gl: Context = .init();
+    const buffer = try gl.createBuffer();
+    defer gl.deleteBuffer(buffer);
+
+    gl.bindBuffer(c.uniform_buffer, buffer);
+    gl.bufferDataSize(c.uniform_buffer, 256, c.dynamic_draw);
+    try testing.expectEqual(256, api.stub.state.last_buffer_size);
+    // Nothing was uploaded to get there.
+    try testing.expectEqual(0, api.stub.state.last_upload_len);
+}
+
+test "a sampler is an object like any other, and it is given back" {
+    api.stub.reset();
+    defer api.stub.reset();
+
+    const gl: Context = .init();
+    try testing.expect(gl.has(.samplers));
+
+    const sampler = try gl.createSampler();
+    gl.samplerParameteri(sampler, c.texture_min_filter, @intCast(c.nearest));
+    try testing.expectEqual(1, api.stub.state.live_objects);
+
+    // By unit index, the same number a sampler uniform is set to - and not
+    // `textureUnit(3)`, which is what `activeTexture` takes.
+    gl.bindSampler(3, sampler);
+    try testing.expectEqual(sampler.index(), api.stub.state.samplers[3]);
+    gl.bindSampler(3, .none);
+    try testing.expectEqual(0, api.stub.state.samplers[3]);
+
+    gl.deleteSampler(sampler);
+    try testing.expectEqual(0, api.stub.state.live_objects);
+}
+
+test "colour and alpha can blend by different rules" {
+    api.stub.reset();
+    defer api.stub.reset();
+
+    const gl: Context = .init();
+    gl.blendFuncSeparate(c.src_alpha, c.one_minus_src_alpha, c.one, c.one_minus_src_alpha);
+    gl.blendEquationSeparate(c.func_add, c.func_add);
+    try testing.expectEqual(
+        .{ c.src_alpha, c.one_minus_src_alpha, c.one, c.one_minus_src_alpha },
+        api.stub.state.last_blend_func,
+    );
+}
+
+test "an attribute read as integers says so" {
+    api.stub.reset();
+    defer api.stub.reset();
+
+    const gl: Context = .init();
+    gl.vertexAttribIPointer(3, 4, c.unsigned_byte, 16, 12);
+    try testing.expect(api.stub.state.last_attribute.integer);
+    try testing.expectEqual(12, api.stub.state.last_attribute.offset);
+
+    gl.vertexAttribPointer(3, 4, c.unsigned_byte, true, 16, 12);
+    try testing.expect(!api.stub.state.last_attribute.integer);
+}
+
+test "depth and stencil have the rest of their state" {
+    api.stub.reset();
+    defer api.stub.reset();
+
+    const gl: Context = .init();
+    gl.depthRange(0.25, 0.75);
+    gl.clearStencil(0);
+    try testing.expectEqual(.{ 0.25, 0.75 }, api.stub.state.last_depth_range);
+
+    // A renderbuffer attached as depth, which is a typed object going to the
+    // wire as its index like every other.
+    const fbo = try gl.createFramebuffer();
+    defer gl.deleteFramebuffer(fbo);
+    const rbo = try gl.createRenderbuffer();
+    defer gl.deleteRenderbuffer(rbo);
+    gl.bindFramebuffer(c.framebuffer, fbo);
+    gl.bindRenderbuffer(c.renderbuffer, rbo);
+    gl.renderbufferStorage(c.renderbuffer, c.depth_component24, 64, 64);
+    gl.framebufferRenderbuffer(c.framebuffer, c.depth_attachment, c.renderbuffer, rbo);
+    try gl.checkFramebuffer(c.framebuffer);
 }
 
 test "the strings a context describes itself with" {

@@ -60,10 +60,47 @@ pub const State = struct {
 
     last_clear_color: [4]Float = .{ 0, 0, 0, 0 },
     last_viewport: [4]Int = .{ 0, 0, 0, 0 },
+    last_scissor: [4]Int = .{ 0, 0, 0, 0 },
+    last_depth_range: [2]Float = .{ 0, 1 },
+    /// `src_rgb`, `dst_rgb`, `src_alpha`, `dst_alpha` of the last
+    /// `blendFuncSeparate`.
+    last_blend_func: [4]Enum = .{ 0, 0, 0, 0 },
     last_matrix: [16]f32 = @splat(0),
-    /// `mode`, `count`, `instances` of the last draw of any kind.
-    last_draw: struct { mode: Enum = 0, count: Sizei = 0, instances: Sizei = 0 } = .{},
+    /// `mode`, `count`, `instances` of the last draw of any kind, and the
+    /// byte offset of the last indexed one.
+    last_draw: struct { mode: Enum = 0, count: Sizei = 0, instances: Sizei = 0, offset: Int = 0 } = .{},
     draw_calls: u32 = 0,
+    /// The last attribute pointer of either kind - where it reads from and
+    /// whether the shader sees integers.
+    last_attribute: struct {
+        index: Uint = 0,
+        size: Int = 0,
+        kind: Enum = 0,
+        integer: bool = false,
+        stride: Sizei = 0,
+        offset: Int = 0,
+    } = .{},
+    /// The last `texImage2D` or `texSubImage2D`, and the first texel of it -
+    /// enough to see which way round the channels went.
+    last_image: struct {
+        internal_format: Int = 0,
+        format: Enum = 0,
+        kind: Enum = 0,
+        width: Sizei = 0,
+        height: Sizei = 0,
+        len: u32 = 0,
+        first: [4]u8 = .{ 0, 0, 0, 0 },
+    } = .{},
+    /// What the last `bufferDataSize` allocated.
+    last_buffer_size: u32 = 0,
+    /// What each uniform buffer slot, and each texture unit's sampler, is
+    /// bound to now. Zero is nothing.
+    uniform_buffers: [8]Uint = @splat(0),
+    samplers: [16]Uint = @splat(0),
+    /// The next index `getUniformBlockIndex` answers, and where the last
+    /// `uniformBlockBinding` pointed one.
+    next_block_index: Uint = 0,
+    last_block_binding: struct { block: Uint = 0, binding: Uint = 0 } = .{},
     /// The most recent `bufferData`, copied - the pointer it came from is
     /// long gone by the time a test looks.
     last_upload: [256]u8 = @splat(0),
@@ -105,14 +142,18 @@ pub fn viewport(x: Int, y: Int, width: Sizei, height: Sizei) void {
     tick();
     state.last_viewport = .{ x, y, width, height };
 }
-pub fn scissor(_: Int, _: Int, _: Sizei, _: Sizei) void {
+pub fn scissor(x: Int, y: Int, width: Sizei, height: Sizei) void {
     tick();
+    state.last_scissor = .{ x, y, width, height };
 }
 pub fn clearColor(r: Float, g: Float, b: Float, a: Float) void {
     tick();
     state.last_clear_color = .{ r, g, b, a };
 }
 pub fn clearDepth(_: Float) void {
+    tick();
+}
+pub fn clearStencil(_: Int) void {
     tick();
 }
 pub fn clear(_: u32) void {
@@ -130,6 +171,10 @@ pub fn depthFunc(_: Enum) void {
 pub fn depthMask(_: Boolean) void {
     tick();
 }
+pub fn depthRange(near: Float, far: Float) void {
+    tick();
+    state.last_depth_range = .{ near, far };
+}
 pub fn colorMask(_: Boolean, _: Boolean, _: Boolean, _: Boolean) void {
     tick();
 }
@@ -143,6 +188,13 @@ pub fn blendFunc(_: Enum, _: Enum) void {
     tick();
 }
 pub fn blendEquation(_: Enum) void {
+    tick();
+}
+pub fn blendFuncSeparate(src_rgb: Enum, dst_rgb: Enum, src_alpha: Enum, dst_alpha: Enum) void {
+    tick();
+    state.last_blend_func = .{ src_rgb, dst_rgb, src_alpha, dst_alpha };
+}
+pub fn blendEquationSeparate(_: Enum, _: Enum) void {
     tick();
 }
 pub fn pixelStorei(_: Enum, _: Int) void {
@@ -223,6 +275,18 @@ pub fn bufferSubData(_: Enum, _: Int, _: [*]const u8, _: u32) void {
     tick();
 }
 
+pub fn bufferDataSize(_: Enum, size: u32, _: Enum) void {
+    tick();
+    state.last_buffer_size = size;
+}
+
+pub fn bindBufferBase(target: Enum, index: Uint, buffer: Uint) void {
+    tick();
+    if (target == enums.uniform_buffer and index < state.uniform_buffers.len) {
+        state.uniform_buffers[index] = buffer;
+    }
+}
+
 // -------------------------------------------------------------------------
 // Vertex arrays and attributes
 // -------------------------------------------------------------------------
@@ -244,8 +308,13 @@ pub fn enableVertexAttribArray(_: Uint) void {
 pub fn disableVertexAttribArray(_: Uint) void {
     tick();
 }
-pub fn vertexAttribPointer(_: Uint, _: Int, _: Enum, _: Boolean, _: Sizei, _: Int) void {
+pub fn vertexAttribPointer(index: Uint, size: Int, kind: Enum, _: Boolean, stride: Sizei, offset: Int) void {
     tick();
+    state.last_attribute = .{ .index = index, .size = size, .kind = kind, .stride = stride, .offset = offset };
+}
+pub fn vertexAttribIPointer(index: Uint, size: Int, kind: Enum, stride: Sizei, offset: Int) void {
+    tick();
+    state.last_attribute = .{ .index = index, .size = size, .kind = kind, .integer = true, .stride = stride, .offset = offset };
 }
 pub fn vertexAttribDivisor(_: Uint, _: Uint) void {
     tick();
@@ -338,7 +407,27 @@ pub fn getAttribLocation(_: Uint, ptr: [*]const u8, len: u32) Int {
 pub fn getUniformLocation(_: Uint, ptr: [*]const u8, len: u32) Uint {
     tick();
     if (len > 0 and ptr[0] == '_') return 0;
-    return object();
+    // Handed out like an object and not counted as a live one. A location
+    // is looked up rather than made, and WebGL has no call to give one back,
+    // so it is not something a program can leak - and counting it would make
+    // every correct program look like one that does.
+    const handed_out = state.next_object;
+    state.next_object += 1;
+    return handed_out;
+}
+
+pub fn getUniformBlockIndex(_: Uint, ptr: [*]const u8, len: u32) Uint {
+    tick();
+    // The same convention as a location: an underscore is the block the
+    // linker removed.
+    if (len > 0 and ptr[0] == '_') return enums.invalid_index;
+    defer state.next_block_index += 1;
+    return state.next_block_index;
+}
+
+pub fn uniformBlockBinding(_: Uint, block: Uint, binding: Uint) void {
+    tick();
+    state.last_block_binding = .{ .block = block, .binding = binding };
 }
 
 // -------------------------------------------------------------------------
@@ -395,11 +484,48 @@ pub fn generateMipmap(_: Enum) void {
     tick();
 }
 
-pub fn texImage2D(_: Enum, _: Int, _: Int, _: Sizei, _: Sizei, _: Int, _: Enum, _: Enum, _: [*]const u8, _: u32) void {
+pub fn texImage2D(_: Enum, _: Int, internal_format: Int, width: Sizei, height: Sizei, _: Int, format: Enum, kind: Enum, ptr: [*]const u8, len: u32) void {
     tick();
+    recordImage(internal_format, width, height, format, kind, ptr, len);
 }
 
-pub fn texSubImage2D(_: Enum, _: Int, _: Int, _: Int, _: Sizei, _: Sizei, _: Enum, _: Enum, _: [*]const u8, _: u32) void {
+pub fn texSubImage2D(_: Enum, _: Int, _: Int, _: Int, width: Sizei, height: Sizei, format: Enum, kind: Enum, ptr: [*]const u8, len: u32) void {
+    tick();
+    recordImage(state.last_image.internal_format, width, height, format, kind, ptr, len);
+}
+
+fn recordImage(internal_format: Int, width: Sizei, height: Sizei, format: Enum, kind: Enum, ptr: [*]const u8, len: u32) void {
+    var first: [4]u8 = .{ 0, 0, 0, 0 };
+    const n = @min(len, first.len);
+    @memcpy(first[0..n], ptr[0..n]);
+    state.last_image = .{
+        .internal_format = internal_format,
+        .format = format,
+        .kind = kind,
+        .width = width,
+        .height = height,
+        .len = len,
+        .first = first,
+    };
+}
+
+// -------------------------------------------------------------------------
+// Samplers
+// -------------------------------------------------------------------------
+
+pub fn createSampler() Uint {
+    tick();
+    return object();
+}
+pub fn deleteSampler(sampler: Uint) void {
+    tick();
+    release(sampler);
+}
+pub fn bindSampler(unit: Uint, sampler: Uint) void {
+    tick();
+    if (unit < state.samplers.len) state.samplers[unit] = sampler;
+}
+pub fn samplerParameteri(_: Uint, _: Enum, _: Int) void {
     tick();
 }
 
@@ -470,10 +596,10 @@ pub fn drawArrays(mode: Enum, _: Int, count: Sizei) void {
     state.last_draw = .{ .mode = mode, .count = count, .instances = 1 };
 }
 
-pub fn drawElements(mode: Enum, count: Sizei, _: Enum, _: Int) void {
+pub fn drawElements(mode: Enum, count: Sizei, _: Enum, offset: Int) void {
     tick();
     state.draw_calls += 1;
-    state.last_draw = .{ .mode = mode, .count = count, .instances = 1 };
+    state.last_draw = .{ .mode = mode, .count = count, .instances = 1, .offset = offset };
 }
 
 pub fn drawArraysInstanced(mode: Enum, _: Int, count: Sizei, instances: Sizei) void {
@@ -482,10 +608,10 @@ pub fn drawArraysInstanced(mode: Enum, _: Int, count: Sizei, instances: Sizei) v
     state.last_draw = .{ .mode = mode, .count = count, .instances = instances };
 }
 
-pub fn drawElementsInstanced(mode: Enum, count: Sizei, _: Enum, _: Int, instances: Sizei) void {
+pub fn drawElementsInstanced(mode: Enum, count: Sizei, _: Enum, offset: Int, instances: Sizei) void {
     tick();
     state.draw_calls += 1;
-    state.last_draw = .{ .mode = mode, .count = count, .instances = instances };
+    state.last_draw = .{ .mode = mode, .count = count, .instances = instances, .offset = offset };
 }
 
 test "objects are handed out from one, and zero stays the null object" {

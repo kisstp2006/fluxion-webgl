@@ -147,6 +147,10 @@ pub const VertexArray = Object("VertexArray");
 pub const Framebuffer = Object("Framebuffer");
 /// A `WebGLRenderbuffer`. See `Object`.
 pub const Renderbuffer = Object("Renderbuffer");
+/// A `WebGLSampler`: how a texture is filtered and wrapped, kept apart from
+/// the texture so one picture can be read two ways. WebGL 2 only. See
+/// `Object`.
+pub const Sampler = Object("Sampler");
 
 /// A `WebGLUniformLocation`.
 ///
@@ -178,6 +182,7 @@ test "the seven kinds are seven types, not seven names for one" {
     try testing.expect(Program != Shader);
     try testing.expect(Framebuffer != Renderbuffer);
     try testing.expect(VertexArray != UniformLocation);
+    try testing.expect(Sampler != Texture);
 
     // Calling the constructor twice the same way gives one type back, which
     // is what makes the aliases above usable at all.

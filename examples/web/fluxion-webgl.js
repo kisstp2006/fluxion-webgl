@@ -122,6 +122,39 @@ export class Fluxion {
     return this.decoder.decode(this.bytes(ptr, len));
   }
 
+  /// The bytes at `ptr[0..len]`, as the view WebGL wants for pixels whose
+  /// channels are `kind`. WebGL 2 checks the view's type against the `type`
+  /// argument and answers a Uint8Array of floats with INVALID_OPERATION, so
+  /// floats are handed over as a Float32Array, the sixteen-bit types as a
+  /// Uint16Array and the thirty-two-bit integer ones as a Uint32Array. A
+  /// pointer that is not aligned for the wider view is copied first: a typed
+  /// array cannot start part-way into one of its elements.
+  pixels(kind, ptr, len) {
+    let View = Uint8Array;
+    switch (kind) {
+      case 0x1406: // FLOAT
+        View = Float32Array;
+        break;
+      case 0x140b: // HALF_FLOAT
+      case 0x1403: // UNSIGNED_SHORT
+      case 0x8033: // UNSIGNED_SHORT_4_4_4_4
+      case 0x8034: // UNSIGNED_SHORT_5_5_5_1
+      case 0x8363: // UNSIGNED_SHORT_5_6_5
+        View = Uint16Array;
+        break;
+      case 0x1405: // UNSIGNED_INT
+      case 0x84fa: // UNSIGNED_INT_24_8
+        View = Uint32Array;
+        break;
+    }
+    if (View === Uint8Array) return this.bytes(ptr, len);
+    const count = Math.floor(len / View.BYTES_PER_ELEMENT);
+    if (ptr % View.BYTES_PER_ELEMENT === 0) {
+      return new View(this.memory.buffer, ptr, count);
+    }
+    return new View(this.bytes(ptr, len).slice().buffer, 0, count);
+  }
+
   /// Copy a JavaScript string into `ptr[0..cap]` as UTF-8 and answer its full
   /// length in bytes - which may be more than `cap`, and the Zig side treats
   /// that as truncation rather than as an error.
@@ -144,16 +177,20 @@ export class Fluxion {
       scissor: (x, y, w, h) => gl.scissor(x, y, w, h),
       clearColor: (r, g, b, a) => gl.clearColor(r, g, b, a),
       clearDepth: (d) => gl.clearDepth(d),
+      clearStencil: (s) => gl.clearStencil(s),
       clear: (mask) => gl.clear(mask),
       enable: (cap) => gl.enable(cap),
       disable: (cap) => gl.disable(cap),
       depthFunc: (f) => gl.depthFunc(f),
       depthMask: (flag) => gl.depthMask(!!flag),
+      depthRange: (near, far) => gl.depthRange(near, far),
       colorMask: (r, g, b, a) => gl.colorMask(!!r, !!g, !!b, !!a),
       cullFace: (mode) => gl.cullFace(mode),
       frontFace: (mode) => gl.frontFace(mode),
       blendFunc: (s, d) => gl.blendFunc(s, d),
       blendEquation: (mode) => gl.blendEquation(mode),
+      blendFuncSeparate: (sr, dr, sa, da) => gl.blendFuncSeparate(sr, dr, sa, da),
+      blendEquationSeparate: (mr, ma) => gl.blendEquationSeparate(mr, ma),
       pixelStorei: (pname, param) => gl.pixelStorei(pname, param),
       finish: () => gl.finish(),
       flush: () => gl.flush(),
@@ -183,6 +220,11 @@ export class Fluxion {
         gl.bufferData(target, self.bytes(ptr, len), usage),
       bufferSubData: (target, offset, ptr, len) =>
         gl.bufferSubData(target, offset, self.bytes(ptr, len)),
+      // The size overload of bufferData: a number where the data would go.
+      bufferDataSize: (target, size, usage) => gl.bufferData(target, size, usage),
+      bindBufferBase: (target, index, b) => {
+        if (self.isWebGL2) gl.bindBufferBase(target, index, self.get(b));
+      },
 
       // vertex arrays and attributes
       createVertexArray: () =>
@@ -208,6 +250,9 @@ export class Fluxion {
       disableVertexAttribArray: (i) => gl.disableVertexAttribArray(i),
       vertexAttribPointer: (i, size, kind, normalized, stride, offset) =>
         gl.vertexAttribPointer(i, size, kind, !!normalized, stride, offset),
+      vertexAttribIPointer: (i, size, kind, stride, offset) => {
+        if (self.isWebGL2) gl.vertexAttribIPointer(i, size, kind, stride, offset);
+      },
       vertexAttribDivisor: (i, divisor) => {
         if (self.isWebGL2) gl.vertexAttribDivisor(i, divisor);
         else if (self.instExt) self.instExt.vertexAttribDivisorANGLE(i, divisor);
@@ -250,6 +295,14 @@ export class Fluxion {
         gl.getAttribLocation(self.get(p), self.text(ptr, len)),
       getUniformLocation: (p, ptr, len) =>
         self.store(gl.getUniformLocation(self.get(p), self.text(ptr, len))),
+      // WebGL 1 has no uniform blocks, so every name is one it has not got.
+      getUniformBlockIndex: (p, ptr, len) =>
+        self.isWebGL2
+          ? gl.getUniformBlockIndex(self.get(p), self.text(ptr, len))
+          : 0xffffffff,
+      uniformBlockBinding: (p, block, binding) => {
+        if (self.isWebGL2) gl.uniformBlockBinding(self.get(p), block, binding);
+      },
 
       // uniforms
       uniform1i: (loc, v) => gl.uniform1i(self.get(loc), v),
@@ -305,7 +358,7 @@ export class Fluxion {
           kind,
           // A zero length is the null upload: allocate the storage and leave
           // it undefined, which is what a render target wants.
-          len === 0 ? null : self.bytes(ptr, len),
+          len === 0 ? null : self.pixels(kind, ptr, len),
         ),
 
       texSubImage2D: (target, level, x, y, width, height, format, kind, ptr, len) =>
@@ -318,8 +371,21 @@ export class Fluxion {
           height,
           format,
           kind,
-          self.bytes(ptr, len),
+          self.pixels(kind, ptr, len),
         ),
+
+      // samplers - WebGL 2 only, and WebGL 1 has no extension that adds them
+      createSampler: () => self.store(self.isWebGL2 ? gl.createSampler() : null),
+      deleteSampler: (s) => {
+        if (self.isWebGL2) gl.deleteSampler(self.get(s));
+        self.release(s);
+      },
+      bindSampler: (unit, s) => {
+        if (self.isWebGL2) gl.bindSampler(unit, self.get(s));
+      },
+      samplerParameteri: (s, pname, param) => {
+        if (self.isWebGL2) gl.samplerParameteri(self.get(s), pname, param);
+      },
 
       // framebuffers
       createFramebuffer: () => self.store(gl.createFramebuffer()),

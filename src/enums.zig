@@ -70,6 +70,9 @@ pub const unsigned_int: Enum = 0x1405;
 pub const float: Enum = 0x1406;
 /// WebGL 2.
 pub const half_float: Enum = 0x140B;
+/// WebGL 2. Twenty-four bits of depth and eight of stencil in one word: what
+/// a `depth24_stencil8` texture is uploaded and read as.
+pub const unsigned_int_24_8: Enum = 0x84FA;
 
 // -------------------------------------------------------------------------
 // Buffers
@@ -181,6 +184,11 @@ pub const attached_shaders: Enum = 0x8B85;
 pub const active_uniforms: Enum = 0x8B86;
 pub const active_attributes: Enum = 0x8B89;
 
+/// WebGL 2. What `getUniformBlockIndex` answers for a block the program has
+/// not got - never declared, or removed by the linker because nothing reads
+/// it. All ones, so it can never be mistaken for a real index.
+pub const invalid_index: Uint = 0xFFFFFFFF;
+
 // -------------------------------------------------------------------------
 // Textures
 // -------------------------------------------------------------------------
@@ -246,10 +254,15 @@ pub const rgba16f: Enum = 0x881A;
 pub const rgba32f: Enum = 0x8814;
 pub const depth_component16: Enum = 0x81A5;
 pub const depth_component24: Enum = 0x81A6;
+pub const depth_component32f: Enum = 0x8CAC;
 pub const depth24_stencil8: Enum = 0x88F0;
 
 pub const unpack_alignment: Enum = 0x0CF5;
 pub const pack_alignment: Enum = 0x0D05;
+/// WebGL 2. How many pixels one row of an upload is, when that is more than
+/// the width being uploaded - a rectangle cut out of a larger image. Zero,
+/// the default, means the width.
+pub const unpack_row_length: Enum = 0x0CF2;
 
 /// WebGL's own. The browser is usually uploading an `<img>`, a `<canvas>` or
 /// a `<video>`, all of which count rows from the top, and GL counts from the
@@ -362,6 +375,10 @@ test "the numbers are the ones the specification prints" {
     try testing.expectEqual(0x2601, linear);
     try testing.expectEqual(0x812F, clamp_to_edge);
     try testing.expectEqual(0x8CD5, framebuffer_complete);
+    try testing.expectEqual(0x84FA, unsigned_int_24_8);
+    try testing.expectEqual(0x8CAC, depth_component32f);
+    try testing.expectEqual(0x0CF2, unpack_row_length);
+    try testing.expectEqual(0xFFFFFFFF, invalid_index);
 }
 
 test "the clear bits or together without overlapping" {

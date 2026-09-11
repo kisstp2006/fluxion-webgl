@@ -238,6 +238,40 @@ one layer up.
 `proj.Clip.gl` is the one line that says which clip space a projection is for.
 WebGL is OpenGL's: depth from -1 to +1.
 
+### Uniform blocks and samplers
+
+WebGL 2's two ways of binding by slot - which is the way a renderer that also
+runs on Direct3D wants to bind, and the way
+[Fluxion RHI](https://github.com/kisstp2006/fluxion-rhi)'s WebGL backend does:
+
+```zig
+const frame = gl.uniformBlockIndex(program, "Frame") orelse return error.NoFrameBlock;
+gl.uniformBlockBinding(program, frame, 0);    // once, after linking
+gl.bindBufferBase(c.uniform_buffer, 0, ubo);  // whenever the buffer changes
+
+const sampler = try gl.createSampler();
+gl.samplerParameteri(sampler, c.texture_min_filter, @intCast(c.nearest));
+gl.bindSampler(0, sampler);                   // unit 0 - the index, not texture0
+```
+
+`uniformBlockIndex` answers null for a block the program has not got, where
+`uniformLocation` answers `.none` and lets you carry on: a missing uniform is
+one number, and a missing block is a whole frame's worth of them read as
+zeros. GLSL ES 3.00 has no `layout(binding = n)`, so `uniformBlockBinding` is
+the only place a block learns its slot - and the program keeps it, so once
+after linking is enough.
+
+A sampler bound to a unit overrides whatever the texture's own `texParameteri`
+said, so one picture can be read smoothly in one draw and in hard pixels in
+the next. Neither blocks nor samplers exist in WebGL 1, and no extension adds
+them; `has(.uniform_blocks)` and `has(.samplers)` are how a program asks.
+
+`bufferDataSize` is WebGL's other `bufferData` - a size where the data would
+go - which is what a uniform buffer, and anything written every frame, is
+made with. JavaScript tells the two overloads apart by the type of the second
+argument, and the wire has no types to tell them apart by, so here they have
+two names.
+
 ### host
 
 The four things `wasm32-freestanding` has not got, and two lines that go near
@@ -298,14 +332,17 @@ Keeping the two files in step is `api.verify`, which walks the imports at
 compile time and compares each signature against the stub. It can only run
 where the imports can be looked at - `extern "webgl"` names a wasm import
 module on one target and a *library to link against* on every other, and on
-Windows that is `webgl.dll`, which does not exist. So `zig build test` builds
-the library for `wasm32-freestanding` as one of its steps, precisely so that
-the check runs and the extern surface is compiled rather than merely parsed.
+Windows that is `webgl.dll`, which does not exist. So it runs from a top-level
+`comptime` block in `root.zig`, on every wasm build of the library, and
+`zig build test` makes one as one of its steps - precisely so that the check
+runs and the extern surface is compiled rather than merely parsed. A `test`
+block would not do: it is analysed only when tests are being built, and a
+wasm build never is one.
 
 ## The JavaScript
 
-`examples/web/fluxion-webgl.js` is the whole of it: four hundred lines, a
-quarter of them comments, with no dependencies and no build step. It
+`examples/web/fluxion-webgl.js` is the whole of it: five hundred lines, a
+good part of them comments, with no dependencies and no build step. It
 implements every import the library declares, and it is the only JavaScript a
 program using this library needs.
 
@@ -330,6 +367,13 @@ has to do:
 
 The third is the one that bites. Every accessor in the file checks
 `view.buffer !== memory.buffer` and rebuilds.
+
+Pixels are the one place the view has a type other than bytes. WebGL 2 checks
+the view it is handed against the upload's `type` and answers a `Uint8Array`
+of floats with `invalid_operation`, so a float texture goes over as a
+`Float32Array`, the sixteen-bit types as a `Uint16Array` and the thirty-two-bit
+integers as a `Uint32Array` - copied first if the pointer is not aligned for
+them, because a typed array cannot start part-way into one of its elements.
 
 ## Examples
 
