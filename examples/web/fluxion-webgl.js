@@ -126,9 +126,10 @@ export class Fluxion {
   /// channels are `kind`. WebGL 2 checks the view's type against the `type`
   /// argument and answers a Uint8Array of floats with INVALID_OPERATION, so
   /// floats are handed over as a Float32Array, the sixteen-bit types as a
-  /// Uint16Array and the thirty-two-bit integer ones as a Uint32Array. A
-  /// pointer that is not aligned for the wider view is copied first: a typed
-  /// array cannot start part-way into one of its elements.
+  /// Uint16Array, the thirty-two-bit ones as a Uint32Array and the signed
+  /// integers as the signed array of their width. A pointer that is not
+  /// aligned for the wider view is copied first: a typed array cannot start
+  /// part-way into one of its elements - see `readPixels` for the way back.
   pixels(kind, ptr, len) {
     let View = Uint8Array;
     switch (kind) {
@@ -144,7 +145,19 @@ export class Fluxion {
         break;
       case 0x1405: // UNSIGNED_INT
       case 0x84fa: // UNSIGNED_INT_24_8
+      case 0x8368: // UNSIGNED_INT_2_10_10_10_REV
+      case 0x8c3b: // UNSIGNED_INT_10F_11F_11F_REV
+      case 0x8c3e: // UNSIGNED_INT_5_9_9_9_REV
         View = Uint32Array;
+        break;
+      case 0x1400: // BYTE
+        View = Int8Array;
+        break;
+      case 0x1402: // SHORT
+        View = Int16Array;
+        break;
+      case 0x1404: // INT
+        View = Int32Array;
         break;
     }
     if (View === Uint8Array) return this.bytes(ptr, len);
@@ -409,8 +422,16 @@ export class Fluxion {
       framebufferRenderbuffer: (target, attachment, rbTarget, r) =>
         gl.framebufferRenderbuffer(target, attachment, rbTarget, self.get(r)),
 
-      readPixels: (x, y, w, h, format, kind, ptr, len) =>
-        gl.readPixels(x, y, w, h, format, kind, self.bytes(ptr, len)),
+      // The same views as an upload, because WebGL checks them the same way.
+      // An unaligned pointer got a copy, and the copy is where the pixels
+      // went - so they are written back to where the module asked for them.
+      readPixels: (x, y, w, h, format, kind, ptr, len) => {
+        const view = self.pixels(kind, ptr, len);
+        gl.readPixels(x, y, w, h, format, kind, view);
+        if (view.buffer !== self.memory.buffer) {
+          self.u8.set(new Uint8Array(view.buffer, 0, view.byteLength), ptr);
+        }
+      },
 
       // drawing
       drawArrays: (mode, first, count) => gl.drawArrays(mode, first, count),

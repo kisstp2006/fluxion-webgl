@@ -379,11 +379,14 @@ The third is the one that bites. Every accessor in the file checks
 `view.buffer !== memory.buffer` and rebuilds.
 
 Pixels are the one place the view has a type other than bytes. WebGL 2 checks
-the view it is handed against the upload's `type` and answers a `Uint8Array`
-of floats with `invalid_operation`, so a float texture goes over as a
-`Float32Array`, the sixteen-bit types as a `Uint16Array` and the thirty-two-bit
-integers as a `Uint32Array` - copied first if the pointer is not aligned for
-them, because a typed array cannot start part-way into one of its elements.
+the view it is handed against the pixels' `type`, on the way in and on the way
+out, and answers a `Uint8Array` of floats with `invalid_operation` - so a
+float texture goes over as a `Float32Array`, the sixteen-bit types as a
+`Uint16Array`, the thirty-two-bit ones as a `Uint32Array` and the signed
+integers as the signed array of their width. A pointer that is not aligned for
+them is copied first, because a typed array cannot start part-way into one of
+its elements, and what `readPixels` wrote into the copy is written back to
+where the module asked for it.
 
 ## Examples
 
