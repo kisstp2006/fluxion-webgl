@@ -28,14 +28,18 @@ pub fn build(b: *std.Build) void {
 
     // The tests above run on the host, against `src/stub.zig`, and so never
     // compile `src/imports.zig` at all - the whole point of that file is that
-    // it only exists for one target. So the suite also *builds* the library
-    // for wasm32-freestanding without running it.
+    // it only exists for one target. Nor, because Zig analyses a function only
+    // when something calls it, do they compile one call in `Context` the way a
+    // browser gets it. So the suite also *builds* for wasm32-freestanding,
+    // without running anything.
     //
-    // That is not a formality. Compiling for wasm is what analyses the extern
-    // declarations, and analysing them is what runs `api.verify`, which is
-    // what proves the stub the tests just used has the same signatures as the
-    // browser will be handed. A mismatch is a compile error here rather than
-    // an argument silently coerced in somebody's tab.
+    // That is not a formality. What it builds is `src/wasm_check.zig`, which
+    // calls every function in `Context` and `host`, so each is compiled
+    // against the real imports - the ones nothing else calls yet included.
+    // And compiling for wasm is what runs `api.verify`, which is what proves
+    // the stub the tests just used has the same signatures as the browser
+    // will be handed. A mismatch is a compile error here rather than an
+    // argument silently coerced in somebody's tab.
     const wasm_target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
         .os_tag = .freestanding,
@@ -43,7 +47,7 @@ pub fn build(b: *std.Build) void {
     const wasm_check = b.addLibrary(.{
         .name = "fluxion-webgl-wasm-check",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
+            .root_source_file = b.path("src/wasm_check.zig"),
             .target = wasm_target,
             .optimize = .ReleaseSmall,
         }),
@@ -195,5 +199,10 @@ pub fn build(b: *std.Build) void {
             .root_module = host_mod,
         });
         test_step.dependOn(&b.addRunArtifact(example_tests).step);
+
+        // And the module itself is built too, for the browser rather than the
+        // host: tests that ran against the stub say nothing about whether the
+        // example compiles for the one target it exists for.
+        test_step.dependOn(&exe.step);
     }
 }

@@ -81,8 +81,8 @@ pub const raw = if (is_wasm) @import("imports.zig") else stub;
 ///
 /// It can only run where the imports can be looked at, which is a wasm build
 /// - see the note above about `-lwebgl`. That is not the hole it sounds like:
-/// `zig build test` compiles the example for `wasm32-freestanding` as one of
-/// its steps precisely so that this runs, and so that the extern surface is
+/// `zig build test` builds `wasm_check.zig` for `wasm32-freestanding` as one
+/// of its steps precisely so that this runs, and so that every call is
 /// compiled for the target it exists for rather than merely parsed.
 ///
 /// Calling convention is deliberately not compared. An `extern` declaration

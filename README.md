@@ -339,6 +339,16 @@ runs and the extern surface is compiled rather than merely parsed. A `test`
 block would not do: it is analysed only when tests are being built, and a
 wasm build never is one.
 
+That wasm build is `src/wasm_check.zig`, and it does one more thing: it calls
+every function in `Context` and `host`. The suite cannot - it runs against the
+stub, and Zig analyses a function only when something calls it - so without
+this, a call that does not compile against the real imports, or one nothing
+has called yet, would be found by the first program to try it. The calls are
+found by walking the types at compile time rather than listed, so one added
+later is covered without anybody remembering to, and their arguments are
+`undefined`, because nothing runs them. The examples are built for wasm as
+part of the suite too.
+
 ## The JavaScript
 
 `examples/web/fluxion-webgl.js` is the whole of it: five hundred lines, a
@@ -409,7 +419,7 @@ corners land inside the clip box under the real projection.
 ## Build
 
 ```bash
-zig build test        # the suite, plus a wasm32-freestanding compile
+zig build test        # the suite, plus every call compiled for wasm32
 zig build example     # the cube, into zig-out/web
 zig build examples    # both
 zig build docs        # API docs into zig-out/docs
