@@ -108,16 +108,21 @@ export class Fluxion {
   }
 
   /// The bytes at `ptr[0..len]`, as a view - no copy. Valid only until the
-  /// module next allocates, which is why nothing here keeps one.
+  /// module next allocates, which is why nothing here keeps one. A wasm32
+  /// address reaches JavaScript signed, negative past 2 GB - where a
+  /// subarray would count from the end - so every helper here reads its
+  /// address and length as the unsigned numbers they are.
   bytes(ptr, len) {
-    return this.u8.subarray(ptr, ptr + len);
+    const at = ptr >>> 0;
+    return this.u8.subarray(at, at + (len >>> 0));
   }
 
   /// `count` floats at `ptr`. The pointer is a byte address and Float32Array
   /// is indexed in floats, hence the shift - and hence the requirement that
   /// the Zig side pass something four-byte aligned, which `[*]const f32` is.
   floats(ptr, count) {
-    return this.f32.subarray(ptr >> 2, (ptr >> 2) + count);
+    const at = (ptr >>> 0) >>> 2;
+    return this.f32.subarray(at, at + (count >>> 0));
   }
 
   text(ptr, len) {
@@ -133,6 +138,8 @@ export class Fluxion {
   /// aligned for the wider view is copied first: a typed array cannot start
   /// part-way into one of its elements - see `readPixels` for the way back.
   pixels(kind, ptr, len) {
+    ptr >>>= 0;
+    len >>>= 0;
     let View = Uint8Array;
     switch (kind) {
       case 0x1406: // FLOAT
@@ -175,8 +182,8 @@ export class Fluxion {
   /// that as truncation rather than as an error.
   writeText(string, ptr, cap) {
     const encoded = new TextEncoder().encode(string);
-    const n = Math.min(encoded.length, cap);
-    this.u8.set(encoded.subarray(0, n), ptr);
+    const n = Math.min(encoded.length, cap >>> 0);
+    this.u8.set(encoded.subarray(0, n), ptr >>> 0);
     return encoded.length;
   }
 
@@ -431,7 +438,7 @@ export class Fluxion {
         const view = self.pixels(kind, ptr, len);
         gl.readPixels(x, y, w, h, format, kind, view);
         if (view.buffer !== self.memory.buffer) {
-          self.u8.set(new Uint8Array(view.buffer, 0, view.byteLength), ptr);
+          self.u8.set(new Uint8Array(view.buffer, 0, view.byteLength), ptr >>> 0);
         }
       },
 
