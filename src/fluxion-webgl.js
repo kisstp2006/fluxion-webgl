@@ -62,6 +62,7 @@ export class Fluxion {
 
     this.memory = null;
     this.cachedU8 = null;
+    this.cachedI32 = null;
     this.cachedF32 = null;
     this.start = performance.now();
     this.decoder = new TextDecoder("utf-8");
@@ -105,6 +106,13 @@ export class Fluxion {
       this.cachedF32 = new Float32Array(this.memory.buffer);
     }
     return this.cachedF32;
+  }
+
+  get i32() {
+    if (!this.cachedI32 || this.cachedI32.buffer !== this.memory.buffer) {
+      this.cachedI32 = new Int32Array(this.memory.buffer);
+    }
+    return this.cachedI32;
   }
 
   /// The bytes at `ptr[0..len]`, as a view - no copy. Valid only until the
@@ -428,8 +436,23 @@ export class Fluxion {
       bindRenderbuffer: (target, r) => gl.bindRenderbuffer(target, self.get(r)),
       renderbufferStorage: (target, format, w, h) =>
         gl.renderbufferStorage(target, format, w, h),
+      renderbufferStorageMultisample: (target, samples, format, w, h) => {
+        if (self.isWebGL2)
+          gl.renderbufferStorageMultisample(target, samples, format, w, h);
+      },
       framebufferRenderbuffer: (target, attachment, rbTarget, r) =>
         gl.framebufferRenderbuffer(target, attachment, rbTarget, self.get(r)),
+      blitFramebuffer: (sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1, mask, filter) => {
+        if (self.isWebGL2)
+          gl.blitFramebuffer(sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1, mask, filter);
+      },
+      getInternalformatSamples: (target, format, out, capacity) => {
+        if (!self.isWebGL2) return 0;
+        const values = gl.getInternalformatParameter(target, format, gl.SAMPLES);
+        const count = Math.min(values ? values.length : 0, capacity >>> 0);
+        for (let i = 0; i < count; ++i) self.i32[(out >>> 2) + i] = values[i];
+        return count;
+      },
 
       // The same views as an upload, because WebGL checks them the same way.
       // An unaligned pointer got a copy, and the copy is where the pixels

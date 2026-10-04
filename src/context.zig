@@ -845,6 +845,10 @@ pub const Context = struct {
         raw.renderbufferStorage(target, format, width, height);
     }
 
+    pub inline fn renderbufferStorageMultisample(_: Context, target: Enum, samples: i32, format: Enum, width: i32, height: i32) void {
+        raw.renderbufferStorageMultisample(target, samples, format, width, height);
+    }
+
     pub inline fn framebufferRenderbuffer(
         _: Context,
         target: Enum,
@@ -853,6 +857,27 @@ pub const Context = struct {
         rbo: Renderbuffer,
     ) void {
         raw.framebufferRenderbuffer(target, attachment, rb_target, rbo.index());
+    }
+
+    pub inline fn blitFramebuffer(
+        _: Context,
+        src_x0: i32,
+        src_y0: i32,
+        src_x1: i32,
+        src_y1: i32,
+        dst_x0: i32,
+        dst_y0: i32,
+        dst_x1: i32,
+        dst_y1: i32,
+        mask: u32,
+        filter: Enum,
+    ) void {
+        raw.blitFramebuffer(src_x0, src_y0, src_x1, src_y1, dst_x0, dst_y0, dst_x1, dst_y1, mask, filter);
+    }
+
+    pub inline fn internalformatSamples(_: Context, target: Enum, internal_format: Enum, out: []i32) []i32 {
+        const count = raw.getInternalformatSamples(target, internal_format, out.ptr, @intCast(out.len));
+        return out[0..@min(count, out.len)];
     }
 
     /// Read a rectangle of the bound framebuffer into `pixels`.

@@ -320,6 +320,9 @@ pub const max_uniform_buffer_bindings: Enum = 0x8A2F;
 pub const max_array_texture_layers: Enum = 0x88FF;
 /// WebGL 2.
 pub const max_samples: Enum = 0x8D57;
+/// WebGL 2. The supported renderbuffer sample counts returned by
+/// `getInternalformatParameter`.
+pub const samples: Enum = 0x80A9;
 
 // -------------------------------------------------------------------------
 // The ones that are defined as a sum

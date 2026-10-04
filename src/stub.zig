@@ -567,8 +567,21 @@ pub fn bindRenderbuffer(_: Enum, _: Uint) void {
 pub fn renderbufferStorage(_: Enum, _: Enum, _: Sizei, _: Sizei) void {
     tick();
 }
+pub fn renderbufferStorageMultisample(_: Enum, _: Sizei, _: Enum, _: Sizei, _: Sizei) void {
+    tick();
+}
 pub fn framebufferRenderbuffer(_: Enum, _: Enum, _: Enum, _: Uint) void {
     tick();
+}
+pub fn blitFramebuffer(_: Int, _: Int, _: Int, _: Int, _: Int, _: Int, _: Int, _: Int, _: Uint, _: Enum) void {
+    tick();
+}
+pub fn getInternalformatSamples(_: Enum, _: Enum, out: [*]Int, capacity: u32) u32 {
+    tick();
+    const supported = [_]Int{ 4, 2, 1 };
+    const count = @min(capacity, supported.len);
+    @memcpy(out[0..count], supported[0..count]);
+    return count;
 }
 
 pub fn readPixels(_: Int, _: Int, width: Sizei, height: Sizei, _: Enum, _: Enum, ptr: [*]u8, len: u32) void {

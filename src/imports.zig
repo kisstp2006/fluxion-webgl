@@ -277,7 +277,12 @@ pub extern "webgl" fn createRenderbuffer() Uint;
 pub extern "webgl" fn deleteRenderbuffer(rbo: Uint) void;
 pub extern "webgl" fn bindRenderbuffer(target: Enum, rbo: Uint) void;
 pub extern "webgl" fn renderbufferStorage(target: Enum, format: Enum, width: Sizei, height: Sizei) void;
+pub extern "webgl" fn renderbufferStorageMultisample(target: Enum, samples: Sizei, format: Enum, width: Sizei, height: Sizei) void;
 pub extern "webgl" fn framebufferRenderbuffer(target: Enum, attachment: Enum, rb_target: Enum, rbo: Uint) void;
+pub extern "webgl" fn blitFramebuffer(src_x0: Int, src_y0: Int, src_x1: Int, src_y1: Int, dst_x0: Int, dst_y0: Int, dst_x1: Int, dst_y1: Int, mask: Uint, filter: Enum) void;
+/// WebGL 2. Writes at most `capacity` supported sample counts and returns
+/// how many were written.
+pub extern "webgl" fn getInternalformatSamples(target: Enum, internal_format: Enum, out: [*]Int, capacity: u32) u32;
 
 /// Read back into `ptr[0..len]`. The rows come back bottom-up, as they do
 /// everywhere in GL; `Context.readPixels` says so and leaves them that way.
