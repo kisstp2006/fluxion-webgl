@@ -284,7 +284,7 @@ pub const unpack_premultiply_alpha_webgl: Enum = 0x9241;
 // -------------------------------------------------------------------------
 
 pub const framebuffer: Enum = 0x8D40;
-pub const renderbuffer: Enum = 0x8DE1;
+pub const renderbuffer: Enum = 0x8D41;
 /// WebGL 2.
 pub const read_framebuffer: Enum = 0x8CA8;
 /// WebGL 2.
@@ -381,6 +381,10 @@ test "the numbers are the ones the specification prints" {
     try testing.expectEqual(0x2601, linear);
     try testing.expectEqual(0x812F, clamp_to_edge);
     try testing.expectEqual(0x8CD5, framebuffer_complete);
+    try testing.expectEqual(0x8D40, framebuffer);
+    try testing.expectEqual(0x8D41, renderbuffer);
+    try testing.expectEqual(0x8CA8, read_framebuffer);
+    try testing.expectEqual(0x8CA9, draw_framebuffer);
     try testing.expectEqual(0x84FA, unsigned_int_24_8);
     try testing.expectEqual(0x8CAC, depth_component32f);
     try testing.expectEqual(0x0CF2, unpack_row_length);
