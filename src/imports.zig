@@ -128,6 +128,9 @@ pub extern "webgl" fn bufferDataSize(target: Enum, size: u32, usage: Enum) void;
 /// `uniform_buffer`, the slot a block was pointed at by `uniformBlockBinding`.
 pub extern "webgl" fn bindBufferBase(target: Enum, index: Uint, buffer: Uint) void;
 
+/// WebGL 2. `bindBufferBase` for `size` bytes of `buffer` from `offset`.
+pub extern "webgl" fn bindBufferRange(target: Enum, index: Uint, buffer: Uint, offset: u32, size: u32) void;
+
 // -------------------------------------------------------------------------
 // Vertex arrays and attributes
 // -------------------------------------------------------------------------

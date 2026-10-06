@@ -82,6 +82,9 @@ pub const array_buffer: Enum = 0x8892;
 pub const element_array_buffer: Enum = 0x8893;
 /// WebGL 2.
 pub const uniform_buffer: Enum = 0x8A11;
+/// WebGL 2. What a `bindBufferRange` offset into a uniform buffer is a
+/// multiple of.
+pub const uniform_buffer_offset_alignment: Enum = 0x8A34;
 /// WebGL 2.
 pub const copy_read_buffer: Enum = 0x8F36;
 /// WebGL 2.

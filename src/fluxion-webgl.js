@@ -255,6 +255,10 @@ export class Fluxion {
       bindBufferBase: (target, index, b) => {
         if (self.isWebGL2) gl.bindBufferBase(target, index, self.get(b));
       },
+      bindBufferRange: (target, index, b, offset, size) => {
+        if (self.isWebGL2)
+          gl.bindBufferRange(target, index, self.get(b), offset >>> 0, size >>> 0);
+      },
 
       // vertex arrays and attributes
       createVertexArray: () =>

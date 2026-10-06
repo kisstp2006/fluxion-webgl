@@ -103,6 +103,9 @@ pub const Limits = struct {
     max_vertex_attribs: u32,
     max_texture_image_units: u32,
     max_combined_texture_image_units: u32,
+    /// What a `bindBufferRange` offset into a uniform buffer is a multiple
+    /// of. WebGL 2; nought on WebGL 1, which has no uniform buffers.
+    uniform_buffer_offset_alignment: u32,
 };
 
 /// A WebGL context: what it is, and everything you can ask it to do.
@@ -127,8 +130,9 @@ pub const Context = struct {
     /// every call here crosses into JavaScript, and the answers do not change
     /// for the life of the context.
     pub fn init() Context {
+        const version = detectVersion();
         return .{
-            .version = detectVersion(),
+            .version = version,
             .limits = .{
                 .max_texture_size = intParameter(enums.max_texture_size),
                 .max_cube_map_texture_size = intParameter(enums.max_cube_map_texture_size),
@@ -136,6 +140,8 @@ pub const Context = struct {
                 .max_vertex_attribs = intParameter(enums.max_vertex_attribs),
                 .max_texture_image_units = intParameter(enums.max_texture_image_units),
                 .max_combined_texture_image_units = intParameter(enums.max_combined_texture_image_units),
+                // A WebGL 1 context answers an enum it has not got with an error.
+                .uniform_buffer_offset_alignment = if (version == .webgl2) intParameter(enums.uniform_buffer_offset_alignment) else 0,
             },
         };
     }
@@ -375,6 +381,13 @@ pub const Context = struct {
     /// `uniformBlockBinding` for how a block is pointed at one. WebGL 2.
     pub inline fn bindBufferBase(_: Context, target: Enum, index: u32, buffer: Buffer) void {
         raw.bindBufferBase(target, index, buffer.index());
+    }
+
+    /// Bind `size` bytes of `buffer` from `offset` to slot `index` of an
+    /// indexed target. For `uniform_buffer` the offset is a multiple of
+    /// `uniform_buffer_offset_alignment`. WebGL 2.
+    pub inline fn bindBufferRange(_: Context, target: Enum, index: u32, buffer: Buffer, offset: u32, size: u32) void {
+        raw.bindBufferRange(target, index, buffer.index(), offset, size);
     }
 
     // ---------------------------------------------------------------------
@@ -1140,6 +1153,10 @@ test "a uniform block is found by name, and one the linker removed is null" {
     defer gl.deleteBuffer(ubo);
     gl.bindBufferBase(c.uniform_buffer, 2, ubo);
     try testing.expectEqual(ubo.index(), api.stub.state.uniform_buffers[2]);
+    // Or a part of it, from where the alignment allows.
+    const step = gl.limits.uniform_buffer_offset_alignment;
+    gl.bindBufferRange(c.uniform_buffer, 2, ubo, step, 64);
+    try testing.expectEqual([2]u32{ step, 64 }, api.stub.state.uniform_ranges[2]);
 }
 
 test "a buffer can be given its size before anything is in it" {

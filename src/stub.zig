@@ -96,6 +96,9 @@ pub const State = struct {
     /// What each uniform buffer slot, and each texture unit's sampler, is
     /// bound to now. Zero is nothing.
     uniform_buffers: [8]Uint = @splat(0),
+    /// Where in its buffer each uniform buffer slot starts, and how much of
+    /// it: nought for all of it, as `bindBufferBase` binds.
+    uniform_ranges: [8][2]u32 = @splat(.{ 0, 0 }),
     samplers: [16]Uint = @splat(0),
     /// The next index `getUniformBlockIndex` answers, and where the last
     /// `uniformBlockBinding` pointed one.
@@ -228,6 +231,7 @@ pub fn getParameterInt(pname: Enum) Int {
         enums.max_uniform_buffer_bindings => 24,
         enums.max_array_texture_layers => 256,
         enums.max_samples => 4,
+        enums.uniform_buffer_offset_alignment => 256,
         else => 0,
     };
 }
@@ -284,6 +288,15 @@ pub fn bindBufferBase(target: Enum, index: Uint, buffer: Uint) void {
     tick();
     if (target == enums.uniform_buffer and index < state.uniform_buffers.len) {
         state.uniform_buffers[index] = buffer;
+        state.uniform_ranges[index] = .{ 0, 0 };
+    }
+}
+
+pub fn bindBufferRange(target: Enum, index: Uint, buffer: Uint, offset: u32, size: u32) void {
+    tick();
+    if (target == enums.uniform_buffer and index < state.uniform_buffers.len) {
+        state.uniform_buffers[index] = buffer;
+        state.uniform_ranges[index] = .{ offset, size };
     }
 }
 
