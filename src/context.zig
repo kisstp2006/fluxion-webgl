@@ -257,6 +257,14 @@ pub const Context = struct {
         raw.depthRange(near, far);
     }
 
+    /// How far each depth written is pushed back, with `polygon_offset_fill`
+    /// enabled: `factor` times the triangle's depth slope, plus `units` of
+    /// the smallest step the depth buffer has. What keeps a shadow map's
+    /// surface from shadowing itself.
+    pub inline fn polygonOffset(_: Context, factor: f32, units: f32) void {
+        raw.polygonOffset(factor, units);
+    }
+
     pub inline fn colorMask(_: Context, r: bool, g: bool, b: bool, a: bool) void {
         raw.colorMask(r, g, b, a);
     }
@@ -1230,6 +1238,8 @@ test "depth and stencil have the rest of their state" {
     gl.depthRange(0.25, 0.75);
     gl.clearStencil(0);
     try testing.expectEqual(.{ 0.25, 0.75 }, api.stub.state.last_depth_range);
+    gl.polygonOffset(1.5, 4);
+    try testing.expectEqual([2]f32{ 1.5, 4 }, api.stub.state.last_polygon_offset);
 
     // A renderbuffer attached as depth, which is a typed object going to the
     // wire as its index like every other.

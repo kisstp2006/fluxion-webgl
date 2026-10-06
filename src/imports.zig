@@ -80,6 +80,7 @@ pub extern "webgl" fn disable(cap: Enum) void;
 pub extern "webgl" fn depthFunc(func: Enum) void;
 pub extern "webgl" fn depthMask(flag: Boolean) void;
 pub extern "webgl" fn depthRange(near: Float, far: Float) void;
+pub extern "webgl" fn polygonOffset(factor: Float, units: Float) void;
 pub extern "webgl" fn colorMask(r: Boolean, g: Boolean, b: Boolean, a: Boolean) void;
 pub extern "webgl" fn cullFace(mode: Enum) void;
 pub extern "webgl" fn frontFace(mode: Enum) void;

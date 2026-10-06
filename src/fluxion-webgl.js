@@ -214,6 +214,7 @@ export class Fluxion {
       depthFunc: (f) => gl.depthFunc(f),
       depthMask: (flag) => gl.depthMask(!!flag),
       depthRange: (near, far) => gl.depthRange(near, far),
+      polygonOffset: (factor, units) => gl.polygonOffset(factor, units),
       colorMask: (r, g, b, a) => gl.colorMask(!!r, !!g, !!b, !!a),
       cullFace: (mode) => gl.cullFace(mode),
       frontFace: (mode) => gl.frontFace(mode),

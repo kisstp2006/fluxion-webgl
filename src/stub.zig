@@ -62,6 +62,7 @@ pub const State = struct {
     last_viewport: [4]Int = .{ 0, 0, 0, 0 },
     last_scissor: [4]Int = .{ 0, 0, 0, 0 },
     last_depth_range: [2]Float = .{ 0, 1 },
+    last_polygon_offset: [2]Float = .{ 0, 0 },
     /// `src_rgb`, `dst_rgb`, `src_alpha`, `dst_alpha` of the last
     /// `blendFuncSeparate`.
     last_blend_func: [4]Enum = .{ 0, 0, 0, 0 },
@@ -177,6 +178,10 @@ pub fn depthMask(_: Boolean) void {
 pub fn depthRange(near: Float, far: Float) void {
     tick();
     state.last_depth_range = .{ near, far };
+}
+pub fn polygonOffset(factor: Float, units: Float) void {
+    tick();
+    state.last_polygon_offset = .{ factor, units };
 }
 pub fn colorMask(_: Boolean, _: Boolean, _: Boolean, _: Boolean) void {
     tick();
